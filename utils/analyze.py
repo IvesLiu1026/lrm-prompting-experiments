@@ -33,7 +33,7 @@ def save_flip_subject_csv(flip_subject_stats, output_path, mode="run"):
         df.to_csv(output_path, index=False)
     return df
 
-def plot_flip_subjects(df, prompt_name):
+def plot_flip_subjects(df, prompt_name, plot_folder):
     top_df = df.head(20)
     plt.figure(figsize=(10, 6))
     plt.barh(top_df["Subject"], top_df["Flip Success"], label="Flip Success", color="green")
@@ -46,7 +46,7 @@ def plot_flip_subjects(df, prompt_name):
     plt.savefig(f"{plot_folder}/{prompt_name}_flip_subjects.png")
     plt.close()
 
-def compare_word_counts_per_question(baseline_file, prompt_file, prompt_name, mode="run"):
+def compare_word_counts_per_question(baseline_file, prompt_file, prompt_name, plot_folder, mode="run"):
     def get_word_counts(data):
         result = {}
         for item in data:
@@ -89,30 +89,22 @@ def compare_word_counts_per_question(baseline_file, prompt_file, prompt_name, mo
         os.makedirs("utils", exist_ok=True)
         df.to_csv(f"utils/word_diff_standard_vs_{prompt_name}.csv", index=False)
 
-    os.makedirs("plots", exist_ok=True)
+    os.makedirs(plot_folder, exist_ok=True)
 
     # Violin plots
     plt.figure(figsize=(14, 6))
     sns.violinplot(data=df, x="diff_total", y="subject", density_norm="width", inner="quartile")
     plt.title(f"Distribution of Total Word Count Differences (standard → {prompt_name})")
     plt.tight_layout()
-    if mode == "run":
-        plt.savefig(f"plots/violin_diff_total_{prompt_name}.png")
-        plt.close()
-    else:
-        plt.savefig(f"plots_test/violin_diff_total_{prompt_name}.png")
-        plt.close()
+    plt.savefig(f"{plot_folder}/violin_diff_total_{prompt_name}.png")
+    plt.close()
 
     plt.figure(figsize=(14, 6))
     sns.violinplot(data=df, x="diff_think", y="subject", density_norm="width", inner="quartile", color="orange")
     plt.title(f"Distribution of <think> Word Count Differences (standard → {prompt_name})")
     plt.tight_layout()
-    if mode == "run":
-        plt.savefig(f"plots/violin_diff_think_{prompt_name}.png")
-        plt.close()
-    else:
-        plt.savefig(f"plots_test/violin_diff_think_{prompt_name}.png")
-        plt.close()
+    plt.savefig(f"{plot_folder}/violin_diff_think_{prompt_name}.png")
+    plt.close()
 
     # Scatter plot
     plt.figure(figsize=(8, 6))
@@ -122,13 +114,8 @@ def compare_word_counts_per_question(baseline_file, prompt_file, prompt_name, mo
     plt.xlabel("Baseline Word Count")
     plt.ylabel(f"{prompt_name} Word Count")
     plt.tight_layout()
-    if mode == "run":
-        plt.savefig(f"plots/scatter_total_baseline_vs_{prompt_name}.png")
-        plt.close()
-    else:
-        plt.savefig(f"plots_test/violin_diff_total_baseline_vs_{prompt_name}.png")
-        plt.close()
-
+    plt.savefig(f"{plot_folder}/scatter_total_baseline_vs_{prompt_name}.png")
+    plt.close()
 
 def analyze_single_output(prompt_name, data, baseline_map, mode="run"):
     think_word_count = 0
@@ -192,13 +179,9 @@ def analyze_single_output(prompt_name, data, baseline_map, mode="run"):
     stay_correct = sum(1 for item in data if baseline_map.get(item.get("index")) is True and item.get("correct") is True) if baseline_map else 0
     flip_failure = sum(1 for item in data if baseline_map.get(item.get("index")) is False and item.get("correct") is False) if baseline_map else 0
 
-    
     print(f"\nPrompt: {prompt_name}")
     print(f"Total: {total}")
     print(f"Index Missing: {index_missing_count} | Response Ans Missing: {response_ans_missing_count} | Response Missing: {response_missing_count}")
-    print(f"Index Missing List: {index_missing_list}")
-    print(f"Response Ans Missing List: {response_ans_missing_list}")
-    print(f"Response Missing List: {response_missing_list}")
     print(f"<think>: {pct(think_count)} | Think Words Avg: {think_word_count / think_response_count:.2f}")
     print(f"Accuracy: {pct(correct)}")
     print(f"'Wait' token count: {wait_token_count} | Avg per question: {wait_token_count / total:.2f}")
@@ -214,21 +197,14 @@ def analyze_single_output(prompt_name, data, baseline_map, mode="run"):
     if mode == "run":
         missing_dir = "log/missing_lists"
         os.makedirs(missing_dir, exist_ok=True)
-
-        missing_output = {
-            "index_missing_list": index_missing_list,
-            "response_ans_missing_list": response_ans_missing_list,
-            "response_missing_list": response_missing_list
-        }
         with open(os.path.join(missing_dir, f"{prompt_name}_missing.json"), "w", encoding="utf-8") as f:
-            json.dump(missing_output, f, indent=2)
+            json.dump({
+                "index_missing_list": index_missing_list,
+                "response_ans_missing_list": response_ans_missing_list,
+                "response_missing_list": response_missing_list
+            }, f, indent=2)
 
-        
-
-    return {item["index"]: item["correct"] for item in data if item.get("correct") is not None}
-
-        
-
+    return {item["index"]: item["correct"] for item in data if item.get("correct") is not None}, flip_subject_stats
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -237,12 +213,8 @@ if __name__ == "__main__":
     parser.add_argument("--folder", type=str, default="output", help="Folder containing outputs")
     parser.add_argument("--mode", type=str, choices=["run", "test"], default="run", help="Mode: run or test")
     args = parser.parse_args()
-    
-    if args.mode == "run":
-        plot_folder = "output/plots"
-    else:
-        plot_folder = "output/plots_test"
 
+    plot_folder = "output/plots" if args.mode == "run" else "output/plots_test"
     os.makedirs(plot_folder, exist_ok=True)
 
     files = os.listdir(args.folder)
@@ -251,18 +223,20 @@ if __name__ == "__main__":
 
     baseline_path = os.path.join(args.folder, "standard_output.json")
     baseline_data = load_jsonl_to_list(baseline_path)
-    baseline_map = analyze_single_output("standard", baseline_data, {}, mode=args.mode)
+    baseline_map, _ = analyze_single_output("standard", baseline_data, {}, mode=args.mode)
 
-    input_files = []
-    if args.all:
-        input_files = [f.replace("_output.json", "") for f in files if f.endswith("_output.json") and f != "standard_output.json"]
-    elif args.i:
-        input_files = args.i
-    else:
+    input_files = [f.replace("_output.json", "") for f in files if f.endswith("_output.json") and f != "standard_output.json"] if args.all else args.i
+    if not input_files:
         raise ValueError("Please provide --i or --all")
 
     for name in input_files:
         path = os.path.join(args.folder, f"{name}_output.json")
         data = load_jsonl_to_list(path)
-        analyze_single_output(name, data, baseline_map, mode=args.mode)
-        compare_word_counts_per_question(baseline_path, path, name, mode=args.mode)
+        correct_map, flip_stats = analyze_single_output(name, data, baseline_map, mode=args.mode)
+
+        # output flip summary
+        csv_path = f"{args.folder}/{name}_flip_subjects.csv"
+        df = save_flip_subject_csv(flip_stats, csv_path, mode=args.mode)
+        plot_flip_subjects(df, name, plot_folder)
+
+        compare_word_counts_per_question(baseline_path, path, name, plot_folder, mode=args.mode)
