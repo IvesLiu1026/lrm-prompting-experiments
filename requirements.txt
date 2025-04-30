@@ -1,0 +1,7 @@
+together
+dotenv
+datasets
+openai
+matplot
+seaborn
+tmux
