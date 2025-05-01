@@ -4,4 +4,6 @@ datasets
 openai
 matplot
 seaborn
-tmux
+google-genai
+scipy
+statsmodels
