@@ -10,11 +10,19 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 from prompts.prompts import prompt_map
 import openai
+from google import genai
+from google.genai import types
 
 # ====== API Setup ======
-def get_client(api_key):
+def get_client(provider, api_key):
     load_dotenv()
-    return Together(api_key=os.getenv(api_key))
+    if provider == "together":
+        return Together(api_key=os.getenv(api_key))
+    elif provider == "gemini":
+        genai.Client(api_key=os.getenv(api_key))
+        return genai
+    else:
+        raise ValueError("❌ Unsupported provider. Use 'together' or 'gemini'.")
 
 # ====== Logger Setup ======
 def create_logger(name, folder, shard_id):
@@ -28,29 +36,41 @@ def log_line(logger, msg, mode):
         logger.write(msg + "\n")
 
 # ====== API Call and Response Handling ======
-def call_api(client, model_name, prompt, use_stream=False):
+def call_api(client, provider, model_name, prompt, use_stream=False):
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            temperature=0.1,
-            max__new_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-            stream=use_stream
-        )
+        if provider == "gemini":
+            response = client.models.generate_content(
+                model="models/gemini-2.0-flash",
+                contents=prompt
+            )
+        elif provider == "together":
+            response = client.chat.completions.create(
+                model=model_name,
+                temperature=0.1,
+                max_new_tokens=8192,
+                messages=[{"role": "user", "content": prompt}],
+                stream=use_stream
+            )
+        else:
+            raise ValueError("Unsupported provider")
         return response, None
     except Exception as e:
         return None, str(e)
 
-def extract_response_text(response, use_stream=False):
-    if use_stream:
-        text_parts = []
-        for chunk in response:
-            delta = chunk.choices[0].delta.content if chunk.choices[0].delta else ""
-            if delta:
-                text_parts.append(delta)
-        return "".join(text_parts)
-    else:
-        return response.choices[0].message.content
+
+def extract_response_text(response, provider, use_stream=False):
+    if provider == "gemini":
+        return response.text
+    elif provider == "together":
+        if use_stream:
+            text_parts = []
+            for chunk in response:
+                delta = chunk.choices[0].delta.content if chunk.choices[0].delta else ""
+                if delta:
+                    text_parts.append(delta)
+            return "".join(text_parts)
+        else:
+            return response.choices[0].message.content
 
 def extract_response_ans(text):
     match = re.search(r"The answer is\s*\((\w)\)", text)
@@ -73,7 +93,7 @@ def dump_json(data, output_file):
 
 # ====== Main Execution Function ======
 def run_experiment(args):
-    client = get_client(args.api_key)
+    client = get_client(args.provider, args.api_key)
     prompt_name = args.prompt
     model_name = args.model
     folder_name = args.folder
@@ -112,12 +132,12 @@ def run_experiment(args):
         log_line(log_file, f"Prompt: {prompt}", args.mode)
 
         retry_count = 0
-        max_retries = 3
+        max_retries = 5
         success = False
 
         while retry_count < max_retries:
             start_time = timer()
-            response, error_message = call_api(client, model_name, prompt, args.stream)
+            response, error_message = call_api(client, args.provider, model_name, prompt, args.stream)
             elapsed_time = timer() - start_time
 
             if response is None:
@@ -126,8 +146,8 @@ def run_experiment(args):
                 continue
 
             try:
-                response_text = extract_response_text(response, args.stream)
-                print(f"Response: {response_text}")
+                response_text = extract_response_text(response, args.provider, args.stream)
+                # print(f"Response: {response_text}")
                 response_ans = extract_response_ans(response_text)
                 token_usage = extract_token_usage(response)
 
@@ -196,6 +216,8 @@ if __name__ == "__main__":
     parser.add_argument("--fill_missing", type=str, help="Prompt name to fill missing indices from log/missing_lists")
     parser.add_argument("--folder", type=str, default="20256666")
     parser.add_argument("--stream", action="store_true", help="Use streaming response from model")
+    parser.add_argument("--provider", type=str, choices=["together", "gemini"], required=True, help="Choose model provider: together or gemini")
+
     args = parser.parse_args()
 
     run_experiment(args)
