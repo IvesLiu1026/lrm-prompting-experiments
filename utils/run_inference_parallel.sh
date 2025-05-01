@@ -75,7 +75,7 @@ for i in $(seq 0 $((SHARDS - 1))); do
     fi
     KEY=${KEYS[$i]}
 
-    CMD="source .venv/bin/activate && python main.py --prompt $PROMPT --start $START --end $END --api_key $KEY --shard_id $i --mode run --folder $FOLDER_NAME"
+    CMD="source .venv/bin/activate && python main.py --prompt $PROMPT --start $START --end $END --api_key $KEY --shard_id $i --mode run --folder $FOLDER_NAME --provider together"
 
     if [ $i -eq 0 ]; then
         tmux send-keys -t $SESSION "$CMD" C-m
