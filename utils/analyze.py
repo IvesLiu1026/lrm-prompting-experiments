@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 from datasets import load_dataset
+# from scipy.stats import wilcoxon
+# from statsmodels.stats.contingency_tables import mcnemar
 
 # Load MMLU dataset
 ds = load_dataset("cais/mmlu", "all")
@@ -39,14 +41,14 @@ def save_flip_subject_csv(flip_subject_stats, output_path):
 
 # === Plot per-subject bar chart ===
 def plot_flip_subjects(df, prompt_name, plot_folder):
-    top_df = df.head(20)
-    plt.figure(figsize=(12, 6))
+    top_df = df
+    plt.figure(figsize=(18, 10))
     plt.barh(top_df["Subject"], top_df["Flip Success"], label="Flip Success", color="green")
     plt.barh(top_df["Subject"], top_df["Flip Failure"], left=top_df["Flip Success"], label="Flip Failure", color="blue")
     plt.barh(top_df["Subject"], top_df["Stay Correct"], left=top_df["Flip Success"] + top_df["Flip Failure"], label="Stay Correct", color="gray")
     plt.barh(top_df["Subject"], top_df["Backfire"], left=top_df["Flip Success"] + top_df["Flip Failure"] + top_df["Stay Correct"], label="Backfire", color="red")
     plt.xlabel("Count")
-    plt.title(f"Top 20 Subjects - Flip Outcomes ({prompt_name})")
+    plt.title(f"All Subjects - Flip Outcomes ({prompt_name})")
     plt.legend()
     plt.gca().invert_yaxis()
     plt.tight_layout()
@@ -76,7 +78,7 @@ def plot_wordcount_scatter(baseline_file, prompt_file, prompt_name, plot_folder)
         })
     df = pd.DataFrame(rows)
 
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(18, 10))
     sns.scatterplot(data=df, x="baseline_total", y="prompt_total", alpha=0.5)
     sns.regplot(data=df, x="baseline_total", y="prompt_total", scatter=False, color="red")
     plt.title(f"Total Word Count: Baseline vs. {prompt_name}")
@@ -86,6 +88,45 @@ def plot_wordcount_scatter(baseline_file, prompt_file, prompt_name, plot_folder)
     os.makedirs(f"{plot_folder}/scatter", exist_ok=True)
     plt.savefig(f"{plot_folder}/scatter/{prompt_name}_scatter_total_words.png")
     plt.close()
+
+# === Analyze and plot missing data per subject ===
+def analyze_missing_by_subject(prompt_name, index_missing_list, response_missing_list, response_ans_missing_list, subject_map, plot_folder, stats_folder):
+    missing_subject_stats = {
+        "index_missing": defaultdict(int),
+        "response_missing": defaultdict(int),
+        "answer_missing": defaultdict(int)
+    }
+
+    for idx in index_missing_list:
+        subj = subject_map.get(idx, "Unknown")
+        missing_subject_stats["index_missing"][subj] += 1
+
+    for idx in response_missing_list:
+        subj = subject_map.get(idx, "Unknown")
+        missing_subject_stats["response_missing"][subj] += 1
+
+    for idx in response_ans_missing_list:
+        subj = subject_map.get(idx, "Unknown")
+        missing_subject_stats["answer_missing"][subj] += 1
+
+    missing_plot_dir = os.path.join(plot_folder, "missing")
+    os.makedirs(missing_plot_dir, exist_ok=True)
+    os.makedirs(f"{stats_folder}/missing_details", exist_ok=True)
+
+    for miss_type, counter in missing_subject_stats.items():
+        df_miss = pd.DataFrame({
+            "Subject": list(counter.keys()),
+            "Count": list(counter.values())
+        }).sort_values("Count", ascending=False)
+
+        df_miss.to_csv(f"{stats_folder}/missing_details/{prompt_name}_{miss_type}.csv", index=False)
+
+        plt.figure(figsize=(18, 10))
+        sns.barplot(data=df_miss, y="Subject", x="Count", color="orange")
+        plt.title(f"Top Subjects - {miss_type.replace('_', ' ').title()} ({prompt_name})")
+        plt.tight_layout()
+        plt.savefig(f"{missing_plot_dir}/{prompt_name}_{miss_type}_bar.png")
+        plt.close()
 
 # === Main analysis logic ===
 def analyze_single_output(prompt_name, data, baseline_map, stats_folder, missing_folder):
@@ -163,6 +204,31 @@ def analyze_single_output(prompt_name, data, baseline_map, stats_folder, missing
         "Response_missing_list": response_missing_list,
         "Response_ans_missing_list": response_ans_missing_list
     }
+    
+    # log all the info
+    print(f"\n📊 Prompt Summary: {prompt_name}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"🧮 Total Questions       : {total:>5}")
+    print(f"✅ Correct               : {correct:>5}")
+    print(f"🎯 Accuracy              : {summary['Accuracy']:.2%}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"📝 Avg. Words            : {summary['Total_words_avg']:>5}")
+    print(f"🧠 Avg. <think> Words    : {summary['Think_words_avg']:>5}")
+    print(f"⏳ Total Latency (s)     : {summary['Time(s)']:>5}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"⏳ Total 'wait' tokens   : {summary['Total_wait_tokens']:>5}")
+    print(f"⏱️ Avg. 'wait' per Q     : {summary['Wait_tokens_avg']:>5}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"🟩 Flip Success          : {summary['Flip_success']:>5}")
+    print(f"🟦 Flip Failure          : {summary['Flip_failure']:>5}")
+    print(f"⬜ Stay Correct          : {summary['Stay_correct']:>5}")
+    print(f"🟥 Backfire              : {summary['Backfire']:>5}")
+    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"❗ Index Missing         : {len(summary['Index_missing_list']):>5}")
+    print(f"❗ Response Missing      : {len(summary['Response_missing_list']):>5}")
+    print(f"❗ Answer Missing        : {len(summary['Response_ans_missing_list']):>5}")
+    print("==================================================\n")
+
 
     os.makedirs(missing_folder, exist_ok=True)
     with open(f"{missing_folder}/{prompt_name}_missing.json", "w", encoding="utf-8") as f:
@@ -173,6 +239,17 @@ def analyze_single_output(prompt_name, data, baseline_map, stats_folder, missing
         }, f, indent=2)
 
     os.makedirs(stats_folder, exist_ok=True)
+    
+    analyze_missing_by_subject(
+        prompt_name,
+        index_missing_list,
+        response_missing_list,
+        response_ans_missing_list,
+        subject_map,
+        plot_folder,
+        stats_folder
+    )
+
     pd.DataFrame([summary]).to_csv(f"{stats_folder}/{prompt_name}_stats.csv", index=False)
 
     return {item["index"]: item["correct"] for item in data if item.get("correct") is not None}, flip_subject_stats
