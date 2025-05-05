@@ -25,7 +25,7 @@ def get_client(provider, api_key):
         from openai import OpenAI
         return OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
-            api_key=os.getenv(api_key)
+            api_key=os.getenv(api_key),
         )
     else:
         raise ValueError("❌ Unsupported provider. Use 'together' or 'gemini'.")
@@ -62,7 +62,7 @@ def call_api(client, provider, model_name, prompt, use_stream=False):
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_new_tokens=8192,
+                max_tokens=40000,
                 stream=use_stream
             )
         else:
@@ -76,6 +76,16 @@ def extract_response_text(response, provider, use_stream=False):
     if provider == "gemini":
         return response.text
     elif provider == "together":
+        if use_stream:
+            text_parts = []
+            for chunk in response:
+                delta = chunk.choices[0].delta.content if chunk.choices[0].delta else ""
+                if delta:
+                    text_parts.append(delta)
+            return "".join(text_parts)
+        else:
+            return response.choices[0].message.content
+    elif provider == "nvidia":
         if use_stream:
             text_parts = []
             for chunk in response:
