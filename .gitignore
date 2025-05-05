@@ -10,3 +10,9 @@ output/
 
 .DS_Store
 .env
+
+Alex_api_keys.txt
+invalid_keys.txt
+valid_keys.txt
+
+.gitignore

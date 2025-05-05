@@ -24,7 +24,7 @@ def merge_missing(prompt, folder="output", shard_ids=None):
 
     shard_ids = shard_ids or [0]  # default: only shard 0
     for shard_id in shard_ids:
-        shard_path = os.path.join("temp", "20250430-missing", f"{prompt}_shard{shard_id}.json")
+        shard_path = os.path.join("temp", f"20250503", f"{prompt}_shard{shard_id}.json")
         if not os.path.exists(shard_path):
             print(f"⚠️ Shard not found: {shard_path}, skipping.")
             continue
