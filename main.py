@@ -21,6 +21,12 @@ def get_client(provider, api_key):
     elif provider == "gemini":
         genai.Client(api_key=os.getenv(api_key))
         return genai
+    elif provider == "nvidia":
+        from openai import OpenAI
+        return OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=os.getenv(api_key)
+        )
     else:
         raise ValueError("❌ Unsupported provider. Use 'together' or 'gemini'.")
 
@@ -49,6 +55,14 @@ def call_api(client, provider, model_name, prompt, use_stream=False):
                 temperature=0.1,
                 max_new_tokens=8192,
                 messages=[{"role": "user", "content": prompt}],
+                stream=use_stream
+            )
+        elif provider == "nvidia":
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_new_tokens=8192,
                 stream=use_stream
             )
         else:
@@ -111,7 +125,10 @@ def run_experiment(args):
     build_prompt = prompt_map[prompt_name]
 
     # Determine indices to run
-    if args.fill_missing:
+    if args.indices:
+        indices_to_run = list(map(int, args.indices.split(",")))
+        print(f"🎯 Using manually specified indices: {len(indices_to_run)} items")
+    elif args.fill_missing:
         with open(f"log/missing_lists/{args.fill_missing}_missing.json", "r", encoding="utf-8") as f:
             missing_data = json.load(f)
         indices_to_run = sorted(set(missing_data.get("index_missing_list", [])) |
@@ -120,6 +137,7 @@ def run_experiment(args):
         print(f"🔄 Filling missing indices for {args.fill_missing}: {len(indices_to_run)} items")
     else:
         indices_to_run = list(range(start, end))
+
 
     for idx in tqdm(indices_to_run, desc=f"Running {prompt_name}"):
         question = ds['test'][idx]['question']
@@ -207,7 +225,7 @@ def run_experiment(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run LLM with different reasoning prompts.")
     parser.add_argument("--prompt", type=str, default="standard", choices=prompt_map.keys())
-    parser.add_argument("--model", type=str, default="deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free")
+    parser.add_argument("--model", type=str, default="Qwen/Qwen3-235B-A22B-fp8-tput")
     parser.add_argument("--api_key", type=str)
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--end", type=int, default=14042)
@@ -216,8 +234,10 @@ if __name__ == "__main__":
     parser.add_argument("--fill_missing", type=str, help="Prompt name to fill missing indices from log/missing_lists")
     parser.add_argument("--folder", type=str, default="20256666")
     parser.add_argument("--stream", action="store_true", help="Use streaming response from model")
-    parser.add_argument("--provider", type=str, choices=["together", "gemini"], required=True, help="Choose model provider: together or gemini")
+    parser.add_argument("--provider", type=str, choices=["together", "gemini", "nvidia"], required=True, help="Choose model provider: together or gemini")
+    parser.add_argument("--indices", type=str, help="Comma-separated index list (e.g. 100,102,105)")
 
+    
     args = parser.parse_args()
 
     run_experiment(args)
