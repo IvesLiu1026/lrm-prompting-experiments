@@ -6,7 +6,7 @@ END_KEY=""
 KEYS_RAW=""
 FOLDER_NAME=""
 MISSING_FILE=""
-PROVIDER="nvidia"
+PROVIDER="together"
 MODEL="qwen/qwq-32b"  # default
 
 # Parse arguments

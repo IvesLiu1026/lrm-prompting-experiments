@@ -175,9 +175,11 @@ def run_experiment(args):
 
             try:
                 response_text = extract_response_text(response, args.provider, args.stream)
-                # print(f"Response: {response_text}")
+                log_line(log_file, f"Response: {response_text}", args.mode)
                 response_ans = extract_response_ans(response_text)
+                log_line(log_file, f"Response Answer: {response_ans}", args.mode)
                 token_usage = extract_token_usage(response)
+                log_line(log_file, f"Token Usage: {token_usage}", args.mode)
 
                 if response_text is None:
                     log_line(log_file, f"⚠️ No response text found.", args.mode)

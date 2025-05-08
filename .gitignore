@@ -16,3 +16,4 @@ invalid_keys.txt
 valid_keys.txt
 
 .gitignore
+nas_data/

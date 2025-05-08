@@ -55,6 +55,23 @@ def plot_flip_subjects(df, prompt_name, plot_folder):
     plt.savefig(f"{plot_folder}/flip/{prompt_name}_flip_subjects.png")
     plt.close()
 
+# only backfire and flip success
+# def plot_flip_subjects(df, prompt_name, plot_folder):
+#     top_df = df
+#     plt.figure(figsize=(18, 10))
+
+#     plt.barh(top_df["Subject"], top_df["Flip Success"], label="Flip Success ✅", color="green")
+#     plt.barh(top_df["Subject"], top_df["Backfire"], 
+#              left=top_df["Flip Success"], label="Backfire ❌", color="red")
+
+#     plt.xlabel("Count")
+#     plt.title(f"All Subjects - Flip Success vs. Backfire ({prompt_name})")
+#     plt.legend()
+#     plt.gca().invert_yaxis()
+#     plt.tight_layout()
+#     plt.savefig(f"{plot_folder}/flip/{prompt_name}_flip_subjects.png")
+#     plt.close()
+
 # === Plot scatter: baseline vs. prompt word count ===
 def plot_wordcount_scatter(baseline_file, prompt_file, prompt_name, plot_folder):
     base_data = load_jsonl_to_list(baseline_file)
@@ -81,6 +98,9 @@ def plot_wordcount_scatter(baseline_file, prompt_file, prompt_name, plot_folder)
     plt.figure(figsize=(18, 10))
     sns.scatterplot(data=df, x="baseline_total", y="prompt_total", alpha=0.5)
     sns.regplot(data=df, x="baseline_total", y="prompt_total", scatter=False, color="red")
+
+    plt.gca().set_aspect('equal', adjustable='box')  # 👈 Add this line for equal scaling
+
     plt.title(f"Total Word Count: Baseline vs. {prompt_name}")
     plt.xlabel("Baseline Word Count")
     plt.ylabel(f"{prompt_name} Word Count")
@@ -88,6 +108,7 @@ def plot_wordcount_scatter(baseline_file, prompt_file, prompt_name, plot_folder)
     os.makedirs(f"{plot_folder}/scatter", exist_ok=True)
     plt.savefig(f"{plot_folder}/scatter/{prompt_name}_scatter_total_words.png")
     plt.close()
+
 
 # === Analyze and plot missing data per subject ===
 def analyze_missing_by_subject(prompt_name, index_missing_list, response_missing_list, response_ans_missing_list, subject_map, plot_folder, stats_folder):
